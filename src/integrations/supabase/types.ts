@@ -14,7 +14,191 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      collection_leads: {
+        Row: {
+          collection_id: string
+          created_at: string
+          lead_id: string
+          user_id: string
+        }
+        Insert: {
+          collection_id: string
+          created_at?: string
+          lead_id: string
+          user_id?: string
+        }
+        Update: {
+          collection_id?: string
+          created_at?: string
+          lead_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collection_leads_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_leads_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collections: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      interactions: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          kind: string
+          lead_id: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          kind?: string
+          lead_id: string
+          user_id?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          lead_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interactions_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads: {
+        Row: {
+          address: string | null
+          city: string | null
+          cnae: string | null
+          cnpj: string | null
+          created_at: string
+          email: string | null
+          facebook: string | null
+          id: string
+          instagram: string | null
+          lat: number | null
+          legal_name: string | null
+          lng: number | null
+          name: string
+          niche: string | null
+          notes: string | null
+          phone: string | null
+          revenue: number | null
+          revenue_source: string | null
+          source: string
+          source_id: string | null
+          state: string | null
+          status: string
+          trade_name: string | null
+          updated_at: string
+          user_id: string
+          verified_at: string | null
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          cnae?: string | null
+          cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          facebook?: string | null
+          id?: string
+          instagram?: string | null
+          lat?: number | null
+          legal_name?: string | null
+          lng?: number | null
+          name: string
+          niche?: string | null
+          notes?: string | null
+          phone?: string | null
+          revenue?: number | null
+          revenue_source?: string | null
+          source?: string
+          source_id?: string | null
+          state?: string | null
+          status?: string
+          trade_name?: string | null
+          updated_at?: string
+          user_id?: string
+          verified_at?: string | null
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          cnae?: string | null
+          cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          facebook?: string | null
+          id?: string
+          instagram?: string | null
+          lat?: number | null
+          legal_name?: string | null
+          lng?: number | null
+          name?: string
+          niche?: string | null
+          notes?: string | null
+          phone?: string | null
+          revenue?: number | null
+          revenue_source?: string | null
+          source?: string
+          source_id?: string | null
+          state?: string | null
+          status?: string
+          trade_name?: string | null
+          updated_at?: string
+          user_id?: string
+          verified_at?: string | null
+          website?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
