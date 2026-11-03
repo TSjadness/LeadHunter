@@ -52,12 +52,12 @@ function LeadDetail() {
   };
   const enrich = async () => {
     const cnpj = (form.cnpj ?? "").replace(/\D/g, "");
-    if (cnpj.length !== 14) return toast.error("Informe um CNPJ com 14 dígitos");
+    if (cnpj.length !== 14) return void toast.error("Informe um CNPJ com 14 dígitos");
     setBusy(true);
     try {
       const r = await cnpjFn({ data: { cnpj } });
-      if (!r.ok) return toast.error(r.error);
-      setForm((f) => ({ ...f, cnpj, legal_name: r.data.legal_name ?? f.legal_name, trade_name: r.data.trade_name ?? f.trade_name, cnae: r.data.cnae ?? f.cnae, address: f.address ?? r.data.address, city: f.city ?? r.data.city, state: f.state ?? r.data.state, phone: f.phone ?? r.data.phone, email: f.email ?? r.data.email, verified_at: new Date().toISOString() }));
+      if (!r.ok) return void toast.error(r.error);
+      setForm((f) => ({ ...f, cnpj, legal_name: r.data.legal_name ?? f.legal_name, trade_name: r.data.trade_name ?? f.trade_name, cnae: r.data.cnae ?? f.cnae, address: f.address ?? r.data.address, city: f.city ?? r.data.city, state: f.state ?? r.data.state, phone: f.phone ?? r.data.phone, email: f.email ?? r.data.email, verified_at: new Date().toISOString() }) as Partial<Lead>);
       toast.success(`BrasilAPI: ${r.data.situacao ?? "dados carregados"}. Clique em Salvar.`);
     } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); } finally { setBusy(false); }
   };

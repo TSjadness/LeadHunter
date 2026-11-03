@@ -35,7 +35,7 @@ function Importar() {
     try {
       if (f.name.endsWith(".json")) { const j = JSON.parse(text); data = Array.isArray(j) ? j : j.leads ?? []; }
       else data = Papa.parse<Record<string, unknown>>(text, { header: true, skipEmptyLines: true }).data;
-    } catch { return toast.error("Arquivo inválido"); }
+    } catch { return void toast.error("Arquivo inválido"); }
     setRows(data); setMapping(guessMapping(Object.keys(data[0] ?? {})));
   };
 

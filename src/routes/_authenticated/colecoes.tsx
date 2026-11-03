@@ -24,7 +24,7 @@ function Colecoes() {
 
   const create = async () => {
     if (!name.trim()) return;
-    try { const c = await createCollection(name); setName(""); setOpen(c.id); qc.invalidateQueries(); }
+    try { const c = await createCollection(name); setName(""); setOpen(c!.id); qc.invalidateQueries(); }
     catch (e) { toast.error(e instanceof Error && e.message.includes("duplicate") ? "Nome já existe" : "Erro ao criar"); }
   };
   const current = cols.find((c) => c.id === open);

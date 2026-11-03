@@ -28,7 +28,7 @@ function Config() {
   const [pw, setPw] = useState("");
 
   const change = async () => {
-    if (pw.length < 6) return toast.error("Mínimo 6 caracteres");
+    if (pw.length < 6) return void toast.error("Mínimo 6 caracteres");
     const { error } = await supabase.auth.updateUser({ password: pw, current_password: current } as never);
     if (error) toast.error(error.message); else { toast.success("Senha alterada"); setPw(""); setCurrent(""); }
   };
