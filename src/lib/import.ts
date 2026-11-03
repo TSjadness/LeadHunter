@@ -17,10 +17,10 @@ export function guessMapping(headers: string[]): Record<string, ImportField | ""
   return m;
 }
 
-export type RowResult = { ok: true; value: Record<string, string> } | { ok: false; error: string };
+export type RowResult = { ok: true; value: Partial<Record<ImportField, string>> & { name: string } } | { ok: false; error: string };
 
 export function mapRow(row: Record<string, unknown>, mapping: Record<string, ImportField | "">): RowResult {
-  const out: Record<string, string> = {};
+  const out: Partial<Record<ImportField, string>> = {};
   for (const [col, field] of Object.entries(mapping)) {
     if (!field) continue;
     const v = row[col];
@@ -33,5 +33,5 @@ export function mapRow(row: Record<string, unknown>, mapping: Record<string, Imp
   }
   if (out.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(out.email)) return { ok: false, error: "e-mail inválido" };
   if (out.state) out.state = out.state.toUpperCase().slice(0, 2);
-  return { ok: true, value: out };
+  return { ok: true, value: { ...out, name: out.name } };
 }

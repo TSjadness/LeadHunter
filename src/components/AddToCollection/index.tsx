@@ -29,7 +29,7 @@ export function AddToCollection({ getLeadIds, disabled, label = "Adicionar" }: {
     try {
       const c = await createCollection(name);
       setName("");
-      await add(c.id, c.name);
+      await add(c!.id, c!.name);
     } catch (e) { toast.error(e instanceof Error ? (e.message.includes("duplicate") ? "Já existe uma coleção com esse nome" : e.message) : "Erro"); }
   };
 

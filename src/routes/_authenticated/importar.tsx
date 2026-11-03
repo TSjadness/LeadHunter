@@ -40,10 +40,10 @@ function Importar() {
   };
 
   const doImport = async () => {
-    const valid: Record<string, string>[] = []; const invalid: string[] = [];
+    const valid: (Partial<Record<ImportField, string>> & { name: string })[] = []; const invalid: string[] = [];
     rows.forEach((r, i) => { const m = mapRow(r, mapping); m.ok ? valid.push(m.value) : invalid.push(`Linha ${i + 2}: ${m.error}`); });
     try {
-      const res = await saveLeads(valid.map((v) => ({ ...v, name: v.name, source: "importacao" })));
+      const res = await saveLeads(valid.map((v) => ({ ...v, source: "importacao" })));
       setReport({ inserted: res.inserted.length, conflicts: res.conflicts, invalid }); setRows([]);
       qc.invalidateQueries(); toast.success(`${res.inserted.length} leads importados`);
     } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }

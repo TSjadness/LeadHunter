@@ -47,7 +47,7 @@ function escapeRegex(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\"]/g, "\\$&");
 }
 
-export function buildOverpassQuery(opts: { niche: string; uf: string; city?: string; limit: number }) {
+export function buildOverpassQuery(opts: { niche: string; uf: string; city?: string | undefined; limit: number }) {
   const { niche, uf, city, limit } = opts;
   const areaState = `area["ISO3166-2"="BR-${uf.toUpperCase()}"]->.uf;`;
   const areaCity = city
@@ -95,9 +95,9 @@ export type DiscoveredLead = {
   verified_at: string;
 };
 
-export function parseElement(el: OsmElement, ctx: { niche: string; uf: string; city?: string }): DiscoveredLead | null {
+export function parseElement(el: OsmElement, ctx: { niche: string; uf: string; city?: string | undefined }): DiscoveredLead | null {
   const t = el.tags ?? {};
-  const name = t.name || t.brand;
+  const name = t["name"] || t["brand"];
   if (!name) return null;
   const pick = (...keys: string[]) => {
     for (const k of keys) if (t[k]) return t[k];
