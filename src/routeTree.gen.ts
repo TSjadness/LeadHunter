@@ -13,8 +13,13 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedBuscaRouteImport } from './routes/_authenticated/busca'
+import { Route as AuthenticatedColecoesRouteImport } from './routes/_authenticated/colecoes'
+import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedImportarRouteImport } from './routes/_authenticated/importar'
+import { Route as AuthenticatedKanbanRouteImport } from './routes/_authenticated/kanban'
 import { Route as AuthenticatedLeadsIndexRouteImport } from './routes/_authenticated/leads.index'
+import { Route as AuthenticatedLeadsIdRouteImport } from './routes/_authenticated/leads.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -35,9 +40,30 @@ const AuthenticatedBuscaRoute = AuthenticatedBuscaRouteImport.update({
   path: '/busca',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedColecoesRoute = AuthenticatedColecoesRouteImport.update({
+  id: '/colecoes',
+  path: '/colecoes',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedConfiguracoesRoute =
+  AuthenticatedConfiguracoesRouteImport.update({
+    id: '/configuracoes',
+    path: '/configuracoes',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedImportarRoute = AuthenticatedImportarRouteImport.update({
+  id: '/importar',
+  path: '/importar',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedKanbanRoute = AuthenticatedKanbanRouteImport.update({
+  id: '/kanban',
+  path: '/kanban',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedLeadsIndexRoute = AuthenticatedLeadsIndexRouteImport.update({
@@ -45,19 +71,34 @@ const AuthenticatedLeadsIndexRoute = AuthenticatedLeadsIndexRouteImport.update({
   path: '/leads/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedLeadsIdRoute = AuthenticatedLeadsIdRouteImport.update({
+  id: '/leads/$id',
+  path: '/leads/$id',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/busca': typeof AuthenticatedBuscaRoute
+  '/colecoes': typeof AuthenticatedColecoesRoute
+  '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/importar': typeof AuthenticatedImportarRoute
+  '/kanban': typeof AuthenticatedKanbanRoute
+  '/leads/$id': typeof AuthenticatedLeadsIdRoute
   '/leads/': typeof AuthenticatedLeadsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/busca': typeof AuthenticatedBuscaRoute
+  '/colecoes': typeof AuthenticatedColecoesRoute
+  '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/importar': typeof AuthenticatedImportarRoute
+  '/kanban': typeof AuthenticatedKanbanRoute
+  '/leads/$id': typeof AuthenticatedLeadsIdRoute
   '/leads': typeof AuthenticatedLeadsIndexRoute
 }
 export interface FileRoutesById {
@@ -66,21 +107,51 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/busca': typeof AuthenticatedBuscaRoute
+  '/_authenticated/colecoes': typeof AuthenticatedColecoesRoute
+  '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/importar': typeof AuthenticatedImportarRoute
+  '/_authenticated/kanban': typeof AuthenticatedKanbanRoute
+  '/_authenticated/leads/$id': typeof AuthenticatedLeadsIdRoute
   '/_authenticated/leads/': typeof AuthenticatedLeadsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/busca' | '/dashboard' | '/leads/'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/busca'
+    | '/colecoes'
+    | '/configuracoes'
+    | '/dashboard'
+    | '/importar'
+    | '/kanban'
+    | '/leads/$id'
+    | '/leads/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/busca' | '/dashboard' | '/leads'
+  to:
+    | '/'
+    | '/auth'
+    | '/busca'
+    | '/colecoes'
+    | '/configuracoes'
+    | '/dashboard'
+    | '/importar'
+    | '/kanban'
+    | '/leads/$id'
+    | '/leads'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/busca'
+    | '/_authenticated/colecoes'
+    | '/_authenticated/configuracoes'
     | '/_authenticated/dashboard'
+    | '/_authenticated/importar'
+    | '/_authenticated/kanban'
+    | '/_authenticated/leads/$id'
     | '/_authenticated/leads/'
   fileRoutesById: FileRoutesById
 }
@@ -120,11 +191,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBuscaRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/colecoes': {
+      id: '/_authenticated/colecoes'
+      path: '/colecoes'
+      fullPath: '/colecoes'
+      preLoaderRoute: typeof AuthenticatedColecoesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/configuracoes': {
+      id: '/_authenticated/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof AuthenticatedConfiguracoesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/dashboard': {
       id: '/_authenticated/dashboard'
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/importar': {
+      id: '/_authenticated/importar'
+      path: '/importar'
+      fullPath: '/importar'
+      preLoaderRoute: typeof AuthenticatedImportarRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/kanban': {
+      id: '/_authenticated/kanban'
+      path: '/kanban'
+      fullPath: '/kanban'
+      preLoaderRoute: typeof AuthenticatedKanbanRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/leads/': {
@@ -134,18 +233,35 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedLeadsIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/leads/$id': {
+      id: '/_authenticated/leads/$id'
+      path: '/leads/$id'
+      fullPath: '/leads/$id'
+      preLoaderRoute: typeof AuthenticatedLeadsIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedBuscaRoute: typeof AuthenticatedBuscaRoute
+  AuthenticatedColecoesRoute: typeof AuthenticatedColecoesRoute
+  AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedImportarRoute: typeof AuthenticatedImportarRoute
+  AuthenticatedKanbanRoute: typeof AuthenticatedKanbanRoute
+  AuthenticatedLeadsIdRoute: typeof AuthenticatedLeadsIdRoute
   AuthenticatedLeadsIndexRoute: typeof AuthenticatedLeadsIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBuscaRoute: AuthenticatedBuscaRoute,
+  AuthenticatedColecoesRoute: AuthenticatedColecoesRoute,
+  AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedImportarRoute: AuthenticatedImportarRoute,
+  AuthenticatedKanbanRoute: AuthenticatedKanbanRoute,
+  AuthenticatedLeadsIdRoute: AuthenticatedLeadsIdRoute,
   AuthenticatedLeadsIndexRoute: AuthenticatedLeadsIndexRoute,
 }
 
