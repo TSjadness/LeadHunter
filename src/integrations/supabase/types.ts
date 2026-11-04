@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_integrations: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          header_name: string | null
+          header_value: string | null
+          id: string
+          method: string
+          name: string
+          results_path: string | null
+          url: string
+          use_in_search: boolean
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          header_name?: string | null
+          header_value?: string | null
+          id?: string
+          method?: string
+          name: string
+          results_path?: string | null
+          url: string
+          use_in_search?: boolean
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          header_name?: string | null
+          header_value?: string | null
+          id?: string
+          method?: string
+          name?: string
+          results_path?: string | null
+          url?: string
+          use_in_search?: boolean
+          user_id?: string
+        }
+        Relationships: []
+      }
       collection_leads: {
         Row: {
           collection_id: string
