@@ -59,15 +59,18 @@ export function buildOverpassQuery(opts: { niche: string; uf: string; city?: str
   const area = bbox ? bbox.join(",") : city ? "area.a" : "area.uf";
   const tags = nicheFilters(niche);
   const nameRe = escapeRegex(niche.trim());
+  // Only named places are usable leads; filter in the query so small limits aren't consumed by unnamed POIs.
   const parts = tags.length
-    ? tags.map((t) => `nwr[${t}](${area});`)
+    ? tags.map((t) => `nwr[${t}]["name"](${area});`)
     : [
         `nwr["name"~"${nameRe}",i]["shop"](${area});`,
         `nwr["name"~"${nameRe}",i]["amenity"](${area});`,
         `nwr["name"~"${nameRe}",i]["office"](${area});`,
         `nwr["name"~"${nameRe}",i]["craft"](${area});`,
       ];
-  return `[out:json][timeout:55];${bbox ? "" : areaState + areaCity}(${parts.join("")});out center tags ${Math.max(1, Math.min(limit, 500))};`;
+  // Over-fetch a little so dedupe/filters still leave `limit` results.
+  const out = Math.max(10, Math.min(limit * 2, 500));
+  return `[out:json][timeout:55];${bbox ? "" : areaState + areaCity}(${parts.join("")});out center tags ${out};`;
 }
 
 export type OsmElement = {
