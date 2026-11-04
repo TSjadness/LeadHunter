@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { buildOverpassQuery, dedupe, parseElement, type OsmElement } from "./osm";
+import { buildOverpassQuery, dedupe, parseElement, type BBox, type OsmElement } from "./osm";
 
 const OVERPASS_ENDPOINTS = [
   "https://overpass.private.coffee/api/interpreter",
@@ -32,7 +32,20 @@ export const searchLeads = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }) => {
-    const query = buildOverpassQuery({ ...data, city: data.city || undefined });
+    // Resolve the city's bounding box via Nominatim (bbox queries are much faster than area lookups).
+    let bbox: BBox | undefined;
+    if (data.city) {
+      try {
+        const u = `https://nominatim.openstreetmap.org/search?format=json&limit=1&country=Brazil&state=${encodeURIComponent(data.uf)}&city=${encodeURIComponent(data.city)}`;
+        const r = await fetchWithTimeout(u, { headers: { "user-agent": "LeadHunterFree/1.0" } }, 10000);
+        const j = (await r.json()) as { boundingbox?: string[] }[];
+        const b = j[0]?.boundingbox?.map(Number);
+        if (b && b.length === 4) bbox = [b[0]!, b[2]!, b[1]!, b[3]!];
+      } catch {
+        /* fall back to area query */
+      }
+    }
+    const query = buildOverpassQuery({ ...data, city: data.city || undefined, bbox });
     const errors: string[] = [];
     // Query all providers in parallel; first valid answer wins (fallback without blocking).
     const attempt = async (url: string) => {

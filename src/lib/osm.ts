@@ -47,13 +47,16 @@ function escapeRegex(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\"]/g, "\\$&");
 }
 
-export function buildOverpassQuery(opts: { niche: string; uf: string; city?: string | undefined; limit: number }) {
-  const { niche, uf, city, limit } = opts;
+export type BBox = [number, number, number, number]; // south, west, north, east
+
+export function buildOverpassQuery(opts: { niche: string; uf: string; city?: string | undefined; limit: number; bbox?: BBox | undefined }) {
+  const { niche, uf, limit, bbox } = opts;
+  const city = bbox ? undefined : opts.city;
   const areaState = `area["ISO3166-2"="BR-${uf.toUpperCase()}"]->.uf;`;
   const areaCity = city
     ? `area["name"="${city.replace(/"/g, "")}"]["boundary"="administrative"](area.uf)->.a;`
     : "";
-  const area = city ? "area.a" : "area.uf";
+  const area = bbox ? bbox.join(",") : city ? "area.a" : "area.uf";
   const tags = nicheFilters(niche);
   const nameRe = escapeRegex(niche.trim());
   const parts = tags.length
@@ -64,7 +67,7 @@ export function buildOverpassQuery(opts: { niche: string; uf: string; city?: str
         `nwr["name"~"${nameRe}",i]["office"](${area});`,
         `nwr["name"~"${nameRe}",i]["craft"](${area});`,
       ];
-  return `[out:json][timeout:55];${areaState}${areaCity}(${parts.join("")});out center tags ${Math.max(1, Math.min(limit, 500))};`;
+  return `[out:json][timeout:55];${bbox ? "" : areaState + areaCity}(${parts.join("")});out center tags ${Math.max(1, Math.min(limit, 500))};`;
 }
 
 export type OsmElement = {
