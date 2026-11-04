@@ -6,6 +6,7 @@ import { buildOverpassQuery, dedupe, parseElement, type OsmElement } from "./osm
 const OVERPASS_ENDPOINTS = [
   "https://overpass.private.coffee/api/interpreter",
   "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
 ];
 
 async function fetchWithTimeout(url: string, init: RequestInit, ms: number) {
@@ -33,34 +34,37 @@ export const searchLeads = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const query = buildOverpassQuery({ ...data, city: data.city || undefined });
     const errors: string[] = [];
-    for (const url of OVERPASS_ENDPOINTS) {
+    // Query all providers in parallel; first valid answer wins (fallback without blocking).
+    const attempt = async (url: string) => {
+      const host = new URL(url).host;
       try {
         const res = await fetchWithTimeout(
           url,
           {
             method: "POST",
-            headers: {
-              "content-type": "application/x-www-form-urlencoded",
-              "user-agent": "LeadHunterFree/1.0",
-            },
+            headers: { "content-type": "application/x-www-form-urlencoded", "user-agent": "LeadHunterFree/1.0" },
             body: "data=" + encodeURIComponent(query),
           },
-          30000,
+          60000,
         );
-        if (!res.ok) {
-          errors.push(`${new URL(url).host}: HTTP ${res.status}`);
-          continue;
-        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = (await res.json()) as { elements: OsmElement[] };
-        const items = dedupe(
-          json.elements
-            .map((e) => parseElement(e, { niche: data.niche, uf: data.uf, city: data.city || undefined }))
-            .filter((x): x is NonNullable<typeof x> => !!x),
-        ).slice(0, data.limit);
-        return { items, provider: new URL(url).host, errors };
+        return { json, host };
       } catch (e) {
-        errors.push(`${new URL(url).host}: ${e instanceof Error ? e.message : "erro"}`);
+        errors.push(`${host}: ${e instanceof Error ? e.message : "erro"}`);
+        throw e;
       }
+    };
+    try {
+      const { json, host } = await Promise.any(OVERPASS_ENDPOINTS.map(attempt));
+      const items = dedupe(
+        json.elements
+          .map((e) => parseElement(e, { niche: data.niche, uf: data.uf, city: data.city || undefined }))
+          .filter((x): x is NonNullable<typeof x> => !!x),
+      ).slice(0, data.limit);
+      return { items, provider: host, errors };
+    } catch {
+      /* all failed */
     }
     return { items: [], provider: null, errors };
   });

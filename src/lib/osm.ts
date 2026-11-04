@@ -64,7 +64,7 @@ export function buildOverpassQuery(opts: { niche: string; uf: string; city?: str
         `nwr["name"~"${nameRe}",i]["office"](${area});`,
         `nwr["name"~"${nameRe}",i]["craft"](${area});`,
       ];
-  return `[out:json][timeout:25];${areaState}${areaCity}(${parts.join("")});out center tags ${Math.max(1, Math.min(limit, 500))};`;
+  return `[out:json][timeout:55];${areaState}${areaCity}(${parts.join("")});out center tags ${Math.max(1, Math.min(limit, 500))};`;
 }
 
 export type OsmElement = {
