@@ -1,10 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { buildOverpassQuery, dedupe, parseElement, type BBox, type DiscoveredLead, type OsmElement } from "./osm";
+import { UFS } from "./constants";
+import { buildOverpassQuery, dedupe, parseElement, parseNominatim, type NominatimPlace, type BBox, type DiscoveredLead, type OsmElement } from "./osm";
 import { extractItems, fillTemplate, mapRecord, type SearchVars } from "./custom-api";
 
 const OVERPASS_ENDPOINTS = [
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
   "https://overpass-api.de/api/interpreter",
   "https://overpass.private.coffee/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
@@ -95,7 +97,7 @@ export const searchLeads = createServerFn({ method: "POST" })
             method: "POST",
             headers: { "content-type": "application/x-www-form-urlencoded", "user-agent": UA },
             body: "data=" + encodeURIComponent(query),
-          }, 60000);
+          }, 85000);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const json = (await res.json()) as { elements?: OsmElement[]; remark?: string };
           if (!json.elements) throw new Error(json.remark ?? "resposta inválida");
@@ -116,9 +118,26 @@ export const searchLeads = createServerFn({ method: "POST" })
       }
     })();
 
-    const [custom, osm] = await Promise.all([customP, osmP]);
-    const providers = [osm.host, ...(ints ?? []).filter((i) => !errors.some((e) => e.startsWith(i.name + ":"))).map((i) => i.name)].filter(Boolean);
-    const items = dedupe([...custom, ...osm.items]).slice(0, data.limit);
+    // Nominatim text search: fast fallback when Overpass mirrors are overloaded.
+    const nomP = (async () => {
+      const stateName = UFS.find(([s]) => s === data.uf.toUpperCase())?.[1] ?? data.uf;
+      const q = `${data.niche} em ${vars.city ? vars.city + ", " : ""}${stateName}`;
+      try {
+        const r = await fetchWithTimeout(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=40&addressdetails=1&extratags=1&countrycodes=br&q=${encodeURIComponent(q)}`, { headers: { "user-agent": UA } }, 15000);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const j = (await r.json()) as NominatimPlace[];
+        return j.filter((p) => !p.address?.["state"] || p.address["state"] === stateName)
+          .map((p) => parseNominatim(p, { niche: data.niche, uf: data.uf, city: vars.city }))
+          .filter((x): x is DiscoveredLead => !!x);
+      } catch (e) {
+        errors.push(`nominatim: ${e instanceof Error ? e.message : "erro"}`);
+        return [] as DiscoveredLead[];
+      }
+    })();
+
+    const [custom, osm, nom] = await Promise.all([customP, osmP, nomP]);
+    const providers = [osm.host, nom.length ? "nominatim.openstreetmap.org" : null, ...(ints ?? []).filter((i) => !errors.some((e) => e.startsWith(i.name + ":"))).map((i) => i.name)].filter(Boolean);
+    const items = dedupe([...custom, ...osm.items, ...nom]).slice(0, data.limit);
     return { items, provider: providers.length ? providers.join(" + ") : null, errors };
   });
 

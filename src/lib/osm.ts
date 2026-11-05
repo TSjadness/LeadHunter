@@ -70,7 +70,7 @@ export function buildOverpassQuery(opts: { niche: string; uf: string; city?: str
       ];
   // Over-fetch a little so dedupe/filters still leave `limit` results.
   const out = Math.max(10, Math.min(limit * 2, 500));
-  return `[out:json][timeout:55];${bbox ? "" : areaState + areaCity}(${parts.join("")});out center tags ${out};`;
+  return `[out:json][timeout:80];${bbox ? "" : areaState + areaCity}(${parts.join("")});out center tags ${out};`;
 }
 
 export type OsmElement = {
@@ -134,4 +134,36 @@ export function parseElement(el: OsmElement, ctx: { niche: string; uf: string; c
 export function dedupe<T extends { source_id: string }>(items: T[]): T[] {
   const seen = new Set<string>();
   return items.filter((i) => (seen.has(i.source_id) ? false : (seen.add(i.source_id), true)));
+}
+
+export type NominatimPlace = {
+  osm_type?: string; osm_id?: number; name?: string; lat?: string; lon?: string;
+  address?: Record<string, string>; extratags?: Record<string, string> | null;
+};
+
+/** Maps a Nominatim search hit to a lead (same source_id format as Overpass, so dedupe works). */
+export function parseNominatim(p: NominatimPlace, ctx: { niche: string; uf: string; city?: string | undefined }): DiscoveredLead | null {
+  if (!p.name || !p.osm_type || p.osm_id == null) return null;
+  const a = p.address ?? {};
+  const t = p.extratags ?? {};
+  const street = [a["road"], a["house_number"]].filter(Boolean).join(", ");
+  const address = [street, a["suburb"], a["postcode"]].filter(Boolean).join(" - ") || null;
+  return {
+    source: "osm",
+    source_id: `${p.osm_type}/${p.osm_id}`,
+    name: p.name,
+    niche: ctx.niche,
+    address,
+    city: a["city"] ?? a["town"] ?? a["village"] ?? a["municipality"] ?? ctx.city ?? null,
+    state: ctx.uf.toUpperCase(),
+    lat: p.lat ? Number(p.lat) : null,
+    lng: p.lon ? Number(p.lon) : null,
+    phone: t["phone"] ?? t["contact:phone"] ?? t["mobile"] ?? null,
+    email: t["email"] ?? t["contact:email"] ?? null,
+    website: t["website"] ?? t["contact:website"] ?? null,
+    instagram: t["contact:instagram"] ?? null,
+    facebook: t["contact:facebook"] ?? null,
+    cnpj: null,
+    verified_at: new Date().toISOString(),
+  };
 }
