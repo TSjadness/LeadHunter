@@ -14,3 +14,4 @@
 - External lookups (Overpass, Nominatim bbox, BrasilAPI) run only in authenticated server functions in src/lib/search.functions.ts, querying providers in parallel so one slow provider never blocks the search.
 - Pure parsing/validation lives in src/lib/osm.ts and src/lib/import.ts so it can be unit-tested; never fabricate missing contact data.
 - The map (MapLibre + OpenFreeMap) is browser-only and must be loaded via src/components/LeadMap/Lazy.tsx.
+- Custom API integrations live in api_integrations (per-user RLS); pure mapping in src/lib/custom-api.ts, called from searchLeads in parallel with Overpass.
