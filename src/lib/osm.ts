@@ -70,7 +70,7 @@ export function buildOverpassQuery(opts: { niche: string; uf: string; city?: str
       ];
   // Over-fetch a little so dedupe/filters still leave `limit` results.
   const out = Math.max(10, Math.min(limit * 2, 500));
-  return `[out:json][timeout:55];${bbox ? "" : areaState + areaCity}(${parts.join("")});out center tags ${out};`;
+  return `[out:json][timeout:80];${bbox ? "" : areaState + areaCity}(${parts.join("")});out center tags ${out};`;
 }
 
 export type OsmElement = {

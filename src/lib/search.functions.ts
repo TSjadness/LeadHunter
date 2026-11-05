@@ -5,6 +5,7 @@ import { buildOverpassQuery, dedupe, parseElement, type BBox, type DiscoveredLea
 import { extractItems, fillTemplate, mapRecord, type SearchVars } from "./custom-api";
 
 const OVERPASS_ENDPOINTS = [
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
   "https://overpass-api.de/api/interpreter",
   "https://overpass.private.coffee/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
@@ -95,7 +96,7 @@ export const searchLeads = createServerFn({ method: "POST" })
             method: "POST",
             headers: { "content-type": "application/x-www-form-urlencoded", "user-agent": UA },
             body: "data=" + encodeURIComponent(query),
-          }, 60000);
+          }, 85000);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const json = (await res.json()) as { elements?: OsmElement[]; remark?: string };
           if (!json.elements) throw new Error(json.remark ?? "resposta inválida");
