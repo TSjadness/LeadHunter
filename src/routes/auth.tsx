@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Crosshair, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
-  const [mode, setMode] = useState<"in" | "up">("in");
+  const [mode, setMode] = useState<"in" | "up" | "forgot">("in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,7 +31,12 @@ function AuthPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      if (mode === "in") {
+      if (mode === "forgot") {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/reset-password` });
+        if (error) throw error;
+        toast.success("Enviamos para seu e-mail o link para redefinir a senha.");
+        setMode("in");
+      } else if (mode === "in") {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         navigate({ to: "/dashboard" });
@@ -49,6 +55,11 @@ function AuthPage() {
     }
   };
 
+  const google = async () => {
+    const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
+    if (r.error) toast.error("Não foi possível entrar com o Google. Tente novamente.");
+  };
+
   return (
     <div className="grid min-h-screen md:grid-cols-2">
       <div className="hidden flex-col justify-between bg-sidebar p-12 text-sidebar-foreground md:flex">
@@ -64,12 +75,17 @@ function AuthPage() {
       </div>
       <div className="flex items-center justify-center p-6">
         <form onSubmit={submit} className="card-surface w-full max-w-sm space-y-4 p-8">
-          <h2 className="text-2xl font-bold">{mode === "in" ? "Entrar" : "Criar conta"}</h2>
+          <h2 className="text-2xl font-bold">{mode === "in" ? "Entrar" : mode === "up" ? "Criar conta" : "Recuperar senha"}</h2>
+          {mode !== "forgot" && (<>
+            <Button type="button" variant="outline" className="w-full" onClick={google}>Continuar com Google</Button>
+            <div className="text-center text-xs text-muted-foreground">ou com e-mail</div>
+          </>)}
           <div className="space-y-2"><Label htmlFor="email">E-mail</Label><Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-          <div className="space-y-2"><Label htmlFor="pw">Senha</Label><Input id="pw" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} /></div>
-          <Button type="submit" className="w-full" disabled={loading}>{loading && <Loader2 className="h-4 w-4 animate-spin" />}{mode === "in" ? "Entrar" : "Criar conta"}</Button>
+          {mode !== "forgot" && <div className="space-y-2"><Label htmlFor="pw">Senha</Label><Input id="pw" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} /></div>}
+          {mode === "in" && <button type="button" className="text-sm text-muted-foreground hover:text-foreground" onClick={() => setMode("forgot")}>Esqueci minha senha</button>}
+          <Button type="submit" className="w-full" disabled={loading}>{loading && <Loader2 className="h-4 w-4 animate-spin" />}{mode === "in" ? "Entrar" : mode === "up" ? "Criar conta" : "Enviar link de recuperação"}</Button>
           <button type="button" className="w-full text-center text-sm text-muted-foreground hover:text-foreground" onClick={() => setMode(mode === "in" ? "up" : "in")}>
-            {mode === "in" ? "Não tem conta? Criar agora" : "Já tem conta? Entrar"}
+            {mode === "in" ? "Não tem conta? Criar agora" : "Voltar para Entrar"}
           </button>
         </form>
       </div>
