@@ -8,7 +8,6 @@ import { addInteraction, interactionsQuery, leadQuery, updateLead, type Lead } f
 import { lookupCnpj } from "@/lib/search.functions";
 import { LEAD_STATUSES, NOT_VERIFIED } from "@/lib/constants";
 import { PageHeader } from "@/components/AppShell";
-import { AddToCollection } from "@/components/AddToCollection";
 import { LazyLeadMap } from "@/components/LeadMap/Lazy";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,7 +66,7 @@ function LeadDetail() {
     <>
       <Link to="/leads" className="mb-3 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" />Voltar</Link>
       <PageHeader title={lead.name} subtitle={`Fonte: ${lead.source === "osm" ? `OpenStreetMap (${lead.source_id})` : lead.source} · Verificado: ${lead.verified_at ? new Date(lead.verified_at).toLocaleString("pt-BR") : "não"}`}
-        actions={<><AddToCollection getLeadIds={async () => [id]} /><Button size="sm" onClick={save}><Save className="h-4 w-4" />Salvar</Button></>} />
+        actions={<><Button size="sm" onClick={save}><Save className="h-4 w-4" />Salvar</Button></>} />
       <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
         <div className="card-surface grid gap-3 p-5 sm:grid-cols-2">
           <div className="space-y-1.5"><Label>Status</Label>

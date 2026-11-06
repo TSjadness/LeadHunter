@@ -37,10 +37,11 @@ export function normalize(s: string) {
 
 export function nicheFilters(niche: string): string[] {
   const n = normalize(niche);
-  for (const [k, v] of Object.entries(NICHE_TAGS)) {
-    if (n === k || n.startsWith(k) || n.replace(/s$/, "") === k) return v;
-  }
-  return [];
+  // Exact match first, then longest prefix ("barbearia" must not match "bar").
+  const exact = NICHE_TAGS[n] ?? NICHE_TAGS[n.replace(/s$/, "")];
+  if (exact) return exact;
+  const key = Object.keys(NICHE_TAGS).sort((a, b) => b.length - a.length).find((k) => n.startsWith(k + " ") || n.startsWith(k));
+  return key && (key.length >= 4 || n.length === key.length) ? NICHE_TAGS[key]! : [];
 }
 
 function escapeRegex(s: string) {
