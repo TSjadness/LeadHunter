@@ -1,18 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useSuspenseQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { deleteLead, leadsQuery, saveLeads } from "@/lib/leads-api";
 import { LEAD_STATUSES, PAGE_SIZE, statusLabel } from "@/lib/constants";
 import { PageHeader } from "@/components/AppShell";
 import { Pager } from "@/components/Pager";
-import { AddToCollection } from "@/components/AddToCollection";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export const Route = createFileRoute("/_authenticated/leads/")({
   head: () => ({ meta: [{ title: "Meus leads — LeadHunter" }, { name: "description", content: "Lista de leads salvos." }, { property: "og:title", content: "Meus leads — LeadHunter" }, { property: "og:description", content: "Lista de leads salvos." }] }),
@@ -24,12 +23,12 @@ function LeadsPage() {
   const { data: leads } = useSuspenseQuery(leadsQuery);
   const qc = useQueryClient();
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState("all");
+  const [statuses, setStatuses] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [newName, setNewName] = useState("");
 
-  const filtered = useMemo(() => leads.filter((l) => (status === "all" || l.status === status) && (!q || `${l.name} ${l.city ?? ""} ${l.niche ?? ""} ${l.cnpj ?? ""}`.toLowerCase().includes(q.toLowerCase()))), [leads, q, status]);
+  const filtered = useMemo(() => leads.filter((l) => (!statuses.size || statuses.has(l.status)) && (!q || `${l.name} ${l.city ?? ""} ${l.niche ?? ""} ${l.cnpj ?? ""}`.toLowerCase().includes(q.toLowerCase()))), [leads, q, statuses]);
   const items = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const add = async () => {
@@ -48,8 +47,17 @@ function LeadsPage() {
       <div className="card-surface p-4">
         <div className="mb-3 flex flex-wrap gap-2">
           <Input placeholder="Buscar por nome, cidade, nicho, CNPJ" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} className="h-9 max-w-xs" />
-          <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}><SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todos status</SelectItem>{LEAD_STATUSES.map((s) => <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>)}</SelectContent></Select>
-          <div className="ml-auto"><AddToCollection disabled={!checked.size} getLeadIds={async () => [...checked]} label={`Coleção (${checked.size})`} /></div>
+          <Popover>
+            <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-9">{statuses.size ? `Status (${statuses.size})` : "Todos status"}<ChevronDown className="h-4 w-4" /></Button></PopoverTrigger>
+            <PopoverContent className="w-52 space-y-2 p-3" align="start">
+              {LEAD_STATUSES.map((s) => (
+                <label key={s.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                  <Checkbox checked={statuses.has(s.id)} onCheckedChange={() => { setStatuses((p) => { const n = new Set(p); n.has(s.id) ? n.delete(s.id) : n.add(s.id); return n; }); setPage(1); }} />{s.label}
+                </label>
+              ))}
+              {statuses.size > 0 && <Button size="sm" variant="ghost" className="w-full" onClick={() => setStatuses(new Set())}>Limpar</Button>}
+            </PopoverContent>
+          </Popover>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

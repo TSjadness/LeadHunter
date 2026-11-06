@@ -2,15 +2,16 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import Papa from "papaparse";
+import * as XLSX from "xlsx";
 import { Download, Upload, Database } from "lucide-react";
 import { toast } from "sonner";
-import { collectionsQuery, leadsQuery, saveLeads } from "@/lib/leads-api";
+import { leadsQuery, saveLeads } from "@/lib/leads-api";
 import { IMPORT_FIELDS, guessMapping, mapRow, type ImportField } from "@/lib/import";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/importar")({
-  head: () => ({ meta: [{ title: "Importar e exportar — LeadHunter" }, { name: "description", content: "Importe e exporte leads em CSV ou JSON." }, { property: "og:title", content: "Importar e exportar — LeadHunter" }, { property: "og:description", content: "Importe e exporte leads em CSV ou JSON." }] }),
+  head: () => ({ meta: [{ title: "Importar e exportar — LeadHunter" }, { name: "description", content: "Importe e exporte leads em Excel, CSV ou JSON." }, { property: "og:title", content: "Importar e exportar — LeadHunter" }, { property: "og:description", content: "Importe e exporte leads em Excel, CSV ou JSON." }] }),
   loader: ({ context }) => context.queryClient.ensureQueryData(leadsQuery),
   component: Importar,
 });
@@ -30,11 +31,16 @@ function Importar() {
 
   const onFile = async (f: File) => {
     setReport(null);
-    const text = await f.text();
     let data: Record<string, unknown>[] = [];
     try {
+      if (/\.xlsx?$/i.test(f.name)) {
+        const wb = XLSX.read(await f.arrayBuffer());
+        data = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]!]!, { defval: "" });
+      } else {
+      const text = await f.text();
       if (f.name.endsWith(".json")) { const j = JSON.parse(text); data = Array.isArray(j) ? j : j.leads ?? []; }
       else data = Papa.parse<Record<string, unknown>>(text, { header: true, skipEmptyLines: true }).data;
+      }
     } catch { return void toast.error("Arquivo inválido"); }
     setRows(data); setMapping(guessMapping(Object.keys(data[0] ?? {})));
   };
@@ -46,31 +52,37 @@ function Importar() {
       const res = await saveLeads(valid.map((v) => ({ ...v, source: "importacao" })));
       setReport({ inserted: res.inserted.length, conflicts: res.conflicts, invalid }); setRows([]);
       qc.invalidateQueries(); toast.success(`${res.inserted.length} leads importados`);
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
+    } catch { toast.error("Não foi possível importar. Verifique o arquivo e tente novamente."); }
   };
 
-  const backup = async () => {
-    const cols = await qc.fetchQuery(collectionsQuery);
-    download(`leadhunter-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ exported_at: new Date().toISOString(), leads, collections: cols }, null, 2), "application/json");
+  const backup = () => {
+    download(`leadhunter-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ exported_at: new Date().toISOString(), leads }, null, 2), "application/json");
+  };
+  const exportExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(leads.map(({ user_id: _u, ...rest }) => rest));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Leads");
+    XLSX.writeFile(wb, `leads-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   return (
     <>
-      <PageHeader title="Importar / Exportar" subtitle="CSV ou JSON com prévia, mapeamento de colunas e relatório de conflitos" />
+      <PageHeader title="Importar / Exportar" subtitle="Excel, CSV ou JSON com prévia, mapeamento de colunas e relatório de conflitos" />
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="card-surface space-y-3 p-5">
           <h3 className="font-semibold">Exportar ({leads.length} leads)</h3>
           <div className="flex flex-wrap gap-2">
+            <Button onClick={exportExcel}><Download className="h-4 w-4" />Excel</Button>
             <Button variant="outline" onClick={() => download("leads.csv", Papa.unparse(leads), "text/csv")}><Download className="h-4 w-4" />CSV</Button>
             <Button variant="outline" onClick={() => download("leads.json", JSON.stringify(leads, null, 2), "application/json")}><Download className="h-4 w-4" />JSON</Button>
-            <Button onClick={backup}><Database className="h-4 w-4" />Backup completo</Button>
+            <Button variant="outline" onClick={backup}><Database className="h-4 w-4" />Backup completo</Button>
           </div>
         </div>
         <div className="card-surface space-y-3 p-5">
           <h3 className="font-semibold">Importar</h3>
           <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border p-6 text-sm text-muted-foreground hover:border-primary">
-            <Upload className="h-5 w-5" />Escolher arquivo .csv ou .json
-            <input type="file" accept=".csv,.json" className="hidden" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
+            <Upload className="h-5 w-5" />Escolher arquivo Excel (.xlsx), .csv ou .json
+            <input type="file" accept=".xlsx,.xls,.csv,.json" className="hidden" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
           </label>
         </div>
       </div>

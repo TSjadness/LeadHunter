@@ -13,7 +13,6 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedBuscaRouteImport } from './routes/_authenticated/busca'
-import { Route as AuthenticatedColecoesRouteImport } from './routes/_authenticated/colecoes'
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedImportarRouteImport } from './routes/_authenticated/importar'
@@ -39,11 +38,6 @@ const AuthRoute = AuthRouteImport.update({
 const AuthenticatedBuscaRoute = AuthenticatedBuscaRouteImport.update({
   id: '/busca',
   path: '/busca',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedColecoesRoute = AuthenticatedColecoesRouteImport.update({
-  id: '/colecoes',
-  path: '/colecoes',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedConfiguracoesRoute =
@@ -88,7 +82,6 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/busca': typeof AuthenticatedBuscaRoute
-  '/colecoes': typeof AuthenticatedColecoesRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/importar': typeof AuthenticatedImportarRoute
@@ -101,7 +94,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/busca': typeof AuthenticatedBuscaRoute
-  '/colecoes': typeof AuthenticatedColecoesRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/importar': typeof AuthenticatedImportarRoute
@@ -116,7 +108,6 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/busca': typeof AuthenticatedBuscaRoute
-  '/_authenticated/colecoes': typeof AuthenticatedColecoesRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/importar': typeof AuthenticatedImportarRoute
@@ -131,7 +122,6 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/busca'
-    | '/colecoes'
     | '/configuracoes'
     | '/dashboard'
     | '/importar'
@@ -144,7 +134,6 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/busca'
-    | '/colecoes'
     | '/configuracoes'
     | '/dashboard'
     | '/importar'
@@ -158,7 +147,6 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/busca'
-    | '/_authenticated/colecoes'
     | '/_authenticated/configuracoes'
     | '/_authenticated/dashboard'
     | '/_authenticated/importar'
@@ -202,13 +190,6 @@ declare module '@tanstack/react-router' {
       path: '/busca'
       fullPath: '/busca'
       preLoaderRoute: typeof AuthenticatedBuscaRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/colecoes': {
-      id: '/_authenticated/colecoes'
-      path: '/colecoes'
-      fullPath: '/colecoes'
-      preLoaderRoute: typeof AuthenticatedColecoesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/configuracoes': {
@@ -265,7 +246,6 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedBuscaRoute: typeof AuthenticatedBuscaRoute
-  AuthenticatedColecoesRoute: typeof AuthenticatedColecoesRoute
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedImportarRoute: typeof AuthenticatedImportarRoute
@@ -277,7 +257,6 @@ interface AuthenticatedRouteRouteChildren {
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedBuscaRoute: AuthenticatedBuscaRoute,
-  AuthenticatedColecoesRoute: AuthenticatedColecoesRoute,
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedImportarRoute: AuthenticatedImportarRoute,

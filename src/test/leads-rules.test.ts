@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildOverpassQuery, dedupe, parseElement } from "@/lib/osm";
+import { buildOverpassQuery, dedupe, nicheFilters, parseElement } from "@/lib/osm";
 import { mapRow, guessMapping } from "@/lib/import";
 import { extractItems, fillTemplate, mapRecord } from "@/lib/custom-api";
 
@@ -42,5 +42,10 @@ describe("lead rules", () => {
     expect(leads[0]?.phone).toBe("79 9999");
     expect(leads[0]?.email).toBeNull();
     expect(leads[1]).toBeNull();
+  });
+  it("barbearia não é confundida com bar", () => {
+    expect(nicheFilters("barbearia")).toEqual(['"shop"="hairdresser"']);
+    expect(nicheFilters("bar")).toContain('"amenity"="bar"');
+    expect(nicheFilters("bares")).toContain('"amenity"="bar"');
   });
 });
