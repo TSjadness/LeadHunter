@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import {
-  LayoutDashboard, Search, Users, FolderKanban, Columns3, FileUp, Settings, LogOut,
+  LayoutDashboard, Search, Users, Columns3, FileUp, Settings, LogOut,
   ChevronsLeft, ChevronsRight, Moon, Sun, Crosshair, Menu, Plug,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,7 +12,6 @@ const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/busca", label: "Pesquisar leads", icon: Search },
   { to: "/leads", label: "Meus leads", icon: Users },
-  { to: "/colecoes", label: "Coleções", icon: FolderKanban },
   { to: "/kanban", label: "Kanban", icon: Columns3 },
   { to: "/importar", label: "Importar / Exportar", icon: FileUp },
   { to: "/integracoes", label: "Integrações de API", icon: Plug },

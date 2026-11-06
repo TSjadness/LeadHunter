@@ -11,7 +11,6 @@ import { NOT_VERIFIED, PAGE_SIZE, UFS } from "@/lib/constants";
 import { PageHeader } from "@/components/AppShell";
 import { Pager } from "@/components/Pager";
 import { LazyLeadMap } from "@/components/LeadMap/Lazy";
-import { AddToCollection } from "@/components/AddToCollection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +22,7 @@ export const Route = createFileRoute("/_authenticated/busca")({
   component: Busca,
 });
 
+const SEARCH_FAIL = "Houve uma falha ao pesquisar os negócios. Tente novamente mais tarde.";
 const toInsert = (l: DiscoveredLead) => ({ ...l });
 
 function Busca() {
@@ -43,13 +43,13 @@ function Busca() {
 
   const run = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true); setResults([]); setChecked(new Set()); setPage(1); setSelected(null);
+    setLoading(true); setResults([]); setMeta(null); setFilter(""); setChecked(new Set()); setPage(1); setSelected(null);
     try {
       const r = await search({ data: { niche, uf, city: city.trim() || undefined, limit } });
       setResults(r.items); setMeta({ provider: r.provider, errors: r.errors });
-      if (!r.provider) toast.error("Provedores indisponíveis no momento. Tente novamente.");
-      else toast.success(`${r.items.length} empresas encontradas via ${r.provider}`);
-    } catch (err) { toast.error(err instanceof Error ? err.message : "Falha na busca"); }
+      if (!r.provider) toast.error(SEARCH_FAIL);
+      else toast.success(`${r.items.length} empresas encontradas`);
+    } catch { toast.error(SEARCH_FAIL); }
     finally { setLoading(false); }
   };
 
@@ -68,7 +68,7 @@ function Busca() {
     try {
       const r = await saveChosen(chosen());
       toast.success(`${r.inserted.length} salvos${r.conflicts.length ? `, ${r.conflicts.length} já existiam` : ""}`);
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Erro"); }
+    } catch { toast.error("Não foi possível salvar os leads. Tente novamente."); }
   };
 
   const toggle = (id: string) => setChecked((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -88,8 +88,7 @@ function Busca() {
 
       {meta && (
         <p className="mt-3 text-xs text-muted-foreground">
-          Origem: {meta.provider ?? "nenhum provedor respondeu"} · {results.length} resultado(s) reais
-          {meta.errors.length > 0 && ` · fallback: ${meta.errors.join("; ")}`}
+          {meta.provider ? `${results.length} resultado(s) encontrados` : SEARCH_FAIL}
         </p>
       )}
 
@@ -101,10 +100,9 @@ function Busca() {
             <div className="ml-auto flex gap-2">
               <Button size="sm" variant="ghost" onClick={() => setChecked(new Set(filtered.map((r) => r.source_id)))} disabled={!filtered.length}>Selecionar todos</Button>
               <Button size="sm" onClick={onSave} disabled={!checked.size}><Save className="h-4 w-4" />Salvar ({checked.size})</Button>
-              <AddToCollection disabled={!checked.size} getLeadIds={async () => { const r = await saveChosen(chosen()); return [...r.inserted, ...r.duplicateIds]; }} />
             </div>
           </div>
-          {loading && <div className="flex flex-1 items-center justify-center py-16 text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" />Consultando OpenStreetMap…</div>}
+          {loading && <div className="flex flex-1 items-center justify-center py-16 text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" />Consultando os dados, isso pode levar alguns minutos…</div>}
           {!loading && !results.length && <p className="py-16 text-center text-sm text-muted-foreground">Faça uma busca para ver empresas reais.</p>}
           <ul className="divide-y divide-border">
             {pageItems.map((r) => (

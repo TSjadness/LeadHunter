@@ -1,20 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Users, Phone, Trophy, FolderKanban, Search } from "lucide-react";
-import { collectionsQuery, leadsQuery } from "@/lib/leads-api";
+import { leadsQuery } from "@/lib/leads-api";
 import { LEAD_STATUSES } from "@/lib/constants";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — LeadHunter" }, { name: "description", content: "Visão geral dos seus leads." }, { property: "og:title", content: "Dashboard — LeadHunter" }, { property: "og:description", content: "Visão geral dos seus leads." }] }),
-  loader: ({ context }) => Promise.all([context.queryClient.ensureQueryData(leadsQuery), context.queryClient.ensureQueryData(collectionsQuery)]),
+  loader: ({ context }) => context.queryClient.ensureQueryData(leadsQuery),
   component: Dashboard,
 });
 
 function Dashboard() {
   const { data: leads } = useSuspenseQuery(leadsQuery);
-  const { data: cols } = useSuspenseQuery(collectionsQuery);
   const withPhone = leads.filter((l) => l.phone).length;
   const won = leads.filter((l) => l.status === "ganho").length;
   const conv = leads.length ? Math.round((won / leads.length) * 100) : 0;
@@ -26,7 +25,7 @@ function Dashboard() {
     { label: "Total de leads", value: leads.length, icon: Users },
     { label: "Com telefone", value: withPhone, icon: Phone },
     { label: "Ganhos", value: `${won} (${conv}%)`, icon: Trophy },
-    { label: "Coleções", value: cols.length, icon: FolderKanban },
+    { label: "Em negociação", value: leads.filter((l) => l.status === "negociacao").length, icon: FolderKanban },
   ];
 
   return (
