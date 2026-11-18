@@ -1,85 +1,398 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useSuspenseQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { ChevronDown, Plus, Trash2 } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { useEffect, useState } from "react";
+import { ChevronDown, Loader2, Phone, Plus, Search, Users, X } from "lucide-react";
 import { toast } from "sonner";
-import { deleteLead, leadsQuery, saveLeads } from "@/lib/leads-api";
-import { LEAD_STATUSES, PAGE_SIZE, statusLabel } from "@/lib/constants";
+import { z } from "zod";
+import { leadsListQuery, type LeadSort } from "@/lib/leads-api";
+import { saveLeads } from "@/lib/leads.functions";
+import {
+  LEAD_PRIORITIES,
+  LEAD_STATUSES,
+  LEADS_PAGE_SIZE,
+  type LeadPriority,
+} from "@/lib/constants";
+import { userMessage } from "@/lib/errors";
 import { PageHeader } from "@/components/AppShell";
-import { Pager } from "@/components/Pager";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { EmptyState, Field, Pager, PriorityBadge, StatusBadge } from "@/components/common";
+import { BulkActions } from "@/components/leads/BulkActions";
+import { LeadsTable } from "@/components/leads/LeadsTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+
+const searchSchema = z.object({
+  page: z.number().int().min(1).catch(1).optional(),
+  q: z.string().max(80).catch("").optional(),
+  status: z.string().max(80).catch("").optional(),
+  /** Comma-separated 1–3. */
+  priority: z.string().max(10).catch("").optional(),
+  city: z.string().max(80).catch("").optional(),
+  phone: z.boolean().catch(false).optional(),
+  sort: z
+    .enum(["created_at", "name", "city", "status_changed_at", "updated_at", "priority"])
+    .catch("created_at")
+    .optional(),
+  dir: z.enum(["asc", "desc"]).catch("desc").optional(),
+});
 
 export const Route = createFileRoute("/_authenticated/leads/")({
-  head: () => ({ meta: [{ title: "Meus leads — LeadHunter" }, { name: "description", content: "Lista de leads salvos." }, { property: "og:title", content: "Meus leads — LeadHunter" }, { property: "og:description", content: "Lista de leads salvos." }] }),
-  loader: ({ context }) => context.queryClient.ensureQueryData(leadsQuery),
+  validateSearch: searchSchema,
+  head: () => ({
+    meta: [
+      { title: "Meus leads — LeadHunter" },
+      { name: "description", content: "Lista de leads salvos." },
+    ],
+  }),
   component: LeadsPage,
 });
 
-function LeadsPage() {
-  const { data: leads } = useSuspenseQuery(leadsQuery);
+function useDebounced<T>(value: T, ms = 300) {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(id);
+  }, [value, ms]);
+  return v;
+}
+
+function NewLeadDialog() {
   const qc = useQueryClient();
-  const [q, setQ] = useState("");
-  const [statuses, setStatuses] = useState<Set<string>>(new Set());
-  const [page, setPage] = useState(1);
-  const [checked, setChecked] = useState<Set<string>>(new Set());
-  const [newName, setNewName] = useState("");
-
-  const filtered = useMemo(() => leads.filter((l) => (!statuses.size || statuses.has(l.status)) && (!q || `${l.name} ${l.city ?? ""} ${l.niche ?? ""} ${l.cnpj ?? ""}`.toLowerCase().includes(q.toLowerCase()))), [leads, q, statuses]);
-  const items = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  const add = async () => {
-    if (!newName.trim()) return;
-    const r = await saveLeads([{ name: newName.trim(), source: "manual" }]);
-    if (r.conflicts.length) toast.warning("Lead já existe"); else toast.success("Lead criado");
-    setNewName(""); qc.invalidateQueries();
+  const save = useServerFn(saveLeads);
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ name: "", city: "", state: "", phone: "", niche: "" });
+  const [busy, setBusy] = useState(false);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const r = await save({
+        data: {
+          items: [{ ...form, state: form.state.toUpperCase() || undefined, source: "manual" }],
+        },
+      });
+      await qc.invalidateQueries({ queryKey: ["leads"] });
+      if (r.inserted[0]) {
+        toast.success("Lead criado");
+        setOpen(false);
+        setForm({ name: "", city: "", state: "", phone: "", niche: "" });
+        navigate({ to: "/leads/$id", params: { id: r.inserted[0].id } });
+      } else {
+        const dup = r.duplicates[0];
+        toast.warning("Esse lead já existe", {
+          action: dup?.existingId
+            ? {
+                label: "Abrir",
+                onClick: () => navigate({ to: "/leads/$id", params: { id: dup.existingId! } }),
+              }
+            : undefined,
+        });
+      }
+    } catch (err) {
+      toast.error(userMessage(err));
+    } finally {
+      setBusy(false);
+    }
   };
-  const remove = async (id: string) => { if (!confirm("Excluir este lead?")) return; await deleteLead(id); qc.invalidateQueries(); };
+  const f = (k: keyof typeof form) => ({
+    value: form[k],
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value }),
+  });
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm">
+          <Plus className="h-4 w-4" />
+          Novo lead
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Novo lead</DialogTitle>
+          <DialogDescription>
+            Preencha o que você sabe. Os demais dados podem ser completados depois.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
+          <Field id="nl-name" label="Nome *" className="sm:col-span-2">
+            <Input id="nl-name" required maxLength={300} autoFocus {...f("name")} />
+          </Field>
+          <Field id="nl-niche" label="Segmento">
+            <Input id="nl-niche" maxLength={120} {...f("niche")} />
+          </Field>
+          <Field id="nl-phone" label="Telefone">
+            <Input id="nl-phone" type="tel" maxLength={40} {...f("phone")} />
+          </Field>
+          <Field id="nl-city" label="Cidade">
+            <Input id="nl-city" maxLength={120} {...f("city")} />
+          </Field>
+          <Field id="nl-uf" label="UF">
+            <Input id="nl-uf" maxLength={2} {...f("state")} />
+          </Field>
+          <DialogFooter className="sm:col-span-2">
+            <Button type="submit" disabled={busy || !form.name.trim()}>
+              {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+              Criar lead
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function LeadsPage() {
+  const s = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const page = s.page ?? 1;
+  const statuses = s.status ? s.status.split(",").filter(Boolean) : [];
+  const priorities = (s.priority ?? "")
+    .split(",")
+    .map(Number)
+    .filter((n): n is LeadPriority => n === 1 || n === 2 || n === 3);
+  const sort = (s.sort ?? "created_at") as LeadSort;
+  const dir = s.dir ?? (sort === "name" || sort === "city" ? "asc" : "desc");
+  const [qInput, setQInput] = useState(s.q ?? "");
+  const [cityInput, setCityInput] = useState(s.city ?? "");
+  const q = useDebounced(qInput);
+  const city = useDebounced(cityInput);
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+
+  const setSearch = (patch: Partial<z.infer<typeof searchSchema>>, resetPage = true) =>
+    navigate({
+      search: (prev) => ({ ...prev, ...patch, ...(resetPage ? { page: 1 } : {}) }),
+      replace: true,
+    });
+
+  useEffect(() => {
+    if ((s.q ?? "") !== q || (s.city ?? "") !== city)
+      setSearch({ q: q || undefined, city: city || undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, city]);
+
+  const filters = {
+    page,
+    q: s.q,
+    statuses,
+    priorities,
+    city: s.city,
+    hasPhone: s.phone,
+    sort,
+    dir,
+  };
+  const { data, isFetching, isLoading, error } = useQuery(leadsListQuery(filters));
+  const anyFilter = !!(s.q || s.city || statuses.length || priorities.length || s.phone);
+
+  const toggleStatus = (id: string) => {
+    const next = statuses.includes(id) ? statuses.filter((x) => x !== id) : [...statuses, id];
+    setSearch({ status: next.join(",") || undefined });
+  };
+  const togglePriority = (id: LeadPriority) => {
+    const next = priorities.includes(id) ? priorities.filter((x) => x !== id) : [...priorities, id];
+    setSearch({ priority: next.join(",") || undefined });
+  };
+  const onSort = (col: LeadSort) =>
+    setSearch(
+      {
+        sort: col,
+        dir:
+          sort === col
+            ? dir === "asc"
+              ? "desc"
+              : "asc"
+            : col === "name" || col === "city"
+              ? "asc"
+              : "desc",
+      },
+      false,
+    );
 
   return (
     <>
-      <PageHeader title="Meus leads" subtitle={`${leads.length} leads salvos`} actions={
-        <div className="flex gap-2"><Input placeholder="Nome do novo lead" value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} className="h-9 w-48" /><Button size="sm" onClick={add}><Plus className="h-4 w-4" />Adicionar</Button></div>
-      } />
-      <div className="card-surface p-4">
-        <div className="mb-3 flex flex-wrap gap-2">
-          <Input placeholder="Buscar por nome, cidade, nicho, CNPJ" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} className="h-9 max-w-xs" />
+      <PageHeader
+        icon={Users}
+        title="Meus leads"
+        subtitle={
+          data
+            ? `${data.total.toLocaleString("pt-BR")} lead(s)${anyFilter ? " com os filtros atuais" : " salvos"}`
+            : "Carregando…"
+        }
+        actions={
+          <>
+            <Button asChild size="sm" variant="outline">
+              <Link to="/busca">
+                <Search className="h-4 w-4" />
+                Pesquisar
+              </Link>
+            </Button>
+            <NewLeadDialog />
+          </>
+        }
+      />
+      <div className="card-surface p-3 sm:p-4">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-72">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Nome, cidade, segmento, CNPJ ou telefone"
+              value={qInput}
+              onChange={(e) => setQInput(e.target.value)}
+              className="h-9 pl-8"
+              aria-label="Buscar leads"
+            />
+          </div>
+          <Input
+            placeholder="Cidade"
+            value={cityInput}
+            onChange={(e) => setCityInput(e.target.value)}
+            className="h-9 w-full sm:w-40"
+            aria-label="Filtrar por cidade"
+          />
           <Popover>
-            <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-9">{statuses.size ? `Status (${statuses.size})` : "Todos status"}<ChevronDown className="h-4 w-4" /></Button></PopoverTrigger>
-            <PopoverContent className="w-52 space-y-2 p-3" align="start">
-              {LEAD_STATUSES.map((s) => (
-                <label key={s.id} className="flex cursor-pointer items-center gap-2 text-sm">
-                  <Checkbox checked={statuses.has(s.id)} onCheckedChange={() => { setStatuses((p) => { const n = new Set(p); n.has(s.id) ? n.delete(s.id) : n.add(s.id); return n; }); setPage(1); }} />{s.label}
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9">
+                {statuses.length ? `Status (${statuses.length})` : "Todos os status"}
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-56 space-y-1 p-2" align="start">
+              {LEAD_STATUSES.map((st) => (
+                <label
+                  key={st.id}
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
+                >
+                  <Checkbox
+                    checked={statuses.includes(st.id)}
+                    onCheckedChange={() => toggleStatus(st.id)}
+                  />
+                  <StatusBadge status={st.id} />
                 </label>
               ))}
-              {statuses.size > 0 && <Button size="sm" variant="ghost" className="w-full" onClick={() => setStatuses(new Set())}>Limpar</Button>}
             </PopoverContent>
           </Popover>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase text-muted-foreground"><tr><th className="w-8 p-2" /><th className="p-2">Nome</th><th className="p-2">Cidade</th><th className="p-2">Telefone</th><th className="p-2">Status</th><th className="p-2">Origem</th><th /></tr></thead>
-            <tbody>
-              {items.map((l) => (
-                <tr key={l.id} className="border-t border-border hover:bg-muted/50">
-                  <td className="p-2"><Checkbox checked={checked.has(l.id)} onCheckedChange={() => setChecked((s) => { const n = new Set(s); n.has(l.id) ? n.delete(l.id) : n.add(l.id); return n; })} /></td>
-                  <td className="p-2 font-medium"><Link to="/leads/$id" params={{ id: l.id }} className="hover:text-primary hover:underline">{l.name}</Link></td>
-                  <td className="p-2">{l.city ? `${l.city}/${l.state ?? ""}` : "—"}</td>
-                  <td className="p-2">{l.phone ?? <span className="text-muted-foreground">—</span>}</td>
-                  <td className="p-2"><Badge variant="secondary">{statusLabel(l.status)}</Badge></td>
-                  <td className="p-2 text-xs text-muted-foreground">{l.source === "osm" ? "OpenStreetMap" : l.source}</td>
-                  <td className="p-2"><Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => remove(l.id)} aria-label="Excluir"><Trash2 className="h-4 w-4" /></Button></td>
-                </tr>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9">
+                {priorities.length ? `Prioridade (${priorities.length})` : "Todas as prioridades"}
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-52 space-y-1 p-2" align="start">
+              {LEAD_PRIORITIES.map((p) => (
+                <label
+                  key={p.id}
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted"
+                >
+                  <Checkbox
+                    checked={priorities.includes(p.id)}
+                    onCheckedChange={() => togglePriority(p.id)}
+                  />
+                  <PriorityBadge priority={p.id} />
+                </label>
               ))}
-            </tbody>
-          </table>
-          {!items.length && <p className="py-10 text-center text-sm text-muted-foreground">Nenhum lead encontrado.</p>}
+            </PopoverContent>
+          </Popover>
+          <Button
+            variant={s.phone ? "default" : "outline"}
+            size="sm"
+            className="h-9"
+            aria-pressed={!!s.phone}
+            onClick={() => setSearch({ phone: s.phone ? undefined : true })}
+          >
+            <Phone className="h-4 w-4" />
+            Com telefone
+          </Button>
+          {anyFilter && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9"
+              onClick={() => {
+                setQInput("");
+                setCityInput("");
+                navigate({ search: {}, replace: true });
+              }}
+            >
+              <X className="h-4 w-4" />
+              Limpar
+            </Button>
+          )}
         </div>
-        <Pager page={page} total={filtered.length} pageSize={PAGE_SIZE} onChange={setPage} />
+        {error ? (
+          <EmptyState title="Não foi possível carregar os leads" description={userMessage(error)} />
+        ) : (
+          <LeadsTable
+            rows={data?.rows ?? []}
+            loading={isLoading || isFetching}
+            checked={checked}
+            onToggle={(id) =>
+              setChecked((c) => {
+                const n = new Set(c);
+                if (n.has(id)) n.delete(id);
+                else n.add(id);
+                return n;
+              })
+            }
+            onToggleAll={(ids, on) =>
+              setChecked((c) => {
+                const n = new Set(c);
+                ids.forEach((id) => (on ? n.add(id) : n.delete(id)));
+                return n;
+              })
+            }
+            sort={sort}
+            dir={dir}
+            onSort={onSort}
+            empty={
+              anyFilter ? (
+                <EmptyState
+                  icon={Search}
+                  title="Nenhum lead com esses filtros"
+                  description="Ajuste a busca ou limpe os filtros."
+                />
+              ) : (
+                <EmptyState
+                  icon={Users}
+                  title="Você ainda não tem leads"
+                  description="Pesquise empresas por segmento e localização ou importe uma planilha."
+                  action={
+                    <>
+                      <Button asChild>
+                        <Link to="/busca">Pesquisar leads</Link>
+                      </Button>
+                      <Button asChild variant="outline">
+                        <Link to="/importar">Importar planilha</Link>
+                      </Button>
+                    </>
+                  }
+                />
+              )
+            }
+          />
+        )}
+        {data && (
+          <Pager
+            page={page}
+            total={data.total}
+            pageSize={LEADS_PAGE_SIZE}
+            onChange={(p) => setSearch({ page: p }, false)}
+            loading={isFetching}
+          />
+        )}
       </div>
+      <BulkActions ids={[...checked]} onClear={() => setChecked(new Set())} />
     </>
   );
 }

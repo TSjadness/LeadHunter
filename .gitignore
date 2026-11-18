@@ -30,3 +30,16 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local environment files — never commit real credentials.
+# .env now holds secrets (INTEGRATIONS_ENCRYPTION_KEY), so it is never committed either.
+# Use .env.example as the template.
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+supabase/.temp
+supabase/.branches
+.nitro

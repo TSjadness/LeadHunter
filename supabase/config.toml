@@ -1,1 +1,28 @@
+# Supabase CLI configuration.
+# project_id is only a local identifier for the Docker stack (`supabase start`); changing it
+# renames the local containers. To work with the hosted project run `npx supabase link --project-ref <ref>`.
 project_id = "fdbwvlsvamwhcyxsuvbi"
+
+# Settings below apply to the LOCAL stack (`npx supabase start`). For the hosted project,
+# set the same values in the dashboard (see SUPABASE_SETUP.md, steps 11–13).
+[auth]
+site_url = "http://localhost:8080"
+additional_redirect_urls = [
+  "http://localhost:8080/**",
+  "http://127.0.0.1:8080/**",
+]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+minimum_password_length = 8
+password_requirements = "letters_digits"
+
+[auth.email]
+enabled = true
+enable_confirmations = true
+secure_password_change = false
+
+[auth.external.google]
+enabled = false
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+skip_nonce_check = false

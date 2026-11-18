@@ -4,14 +4,22 @@ import { AppShell } from "@/components/AppShell";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
-  beforeLoad: async () => {
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) throw redirect({ to: "/auth" });
-    return { user: data.user };
+  // getSession() reads the local session (no network round-trip per navigation).
+  // This guard is only for UX: every data access is enforced by RLS / server checks.
+  beforeLoad: async ({ location }) => {
+    const { data } = await supabase.auth.getSession();
+    const user = data.session?.user;
+    if (!user) throw redirect({ to: "/auth", search: { redirect: location.href } });
+    return { user };
   },
-  component: () => (
-    <AppShell>
+  component: AuthenticatedLayout,
+});
+
+function AuthenticatedLayout() {
+  const { user } = Route.useRouteContext();
+  return (
+    <AppShell email={user.email ?? ""}>
       <Outlet />
     </AppShell>
-  ),
-});
+  );
+}

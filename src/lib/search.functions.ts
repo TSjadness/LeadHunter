@@ -1,187 +1,251 @@
+// Search server functions. The browser calls the OSM search and the custom-API search in
+// parallel and merges results as each one arrives (progressive results). All network
+// code lives in src/lib/server/** and is loaded only on the server.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { UFS } from "./constants";
-import { buildOverpassQuery, dedupe, parseElement, parseNominatim, type NominatimPlace, type BBox, type DiscoveredLead, type OsmElement } from "./osm";
-import { extractItems, fillTemplate, mapRecord, type SearchVars } from "./custom-api";
+import { AppError, runSafely } from "./errors";
+import { mergeDuplicates } from "./dedupe";
+import { normalizeCnpj, isValidCnpj } from "./normalize";
+import type { DiscoveredLead } from "./osm";
+import { searchInputSchema } from "./schemas";
 
-const OVERPASS_ENDPOINTS = [
-  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
-  "https://overpass-api.de/api/interpreter",
-  "https://overpass.private.coffee/api/interpreter",
-  "https://overpass.kumi.systems/api/interpreter",
-];
-// Overpass mirrors rate-limit (HTTP 429) generic user agents.
-const UA = "LeadHunterFree/1.1 (lead discovery app; contact: jadson@leadhunter.app)";
-
-async function fetchWithTimeout(url: string, init: RequestInit, ms: number) {
-  const ctrl = new AbortController();
-  const id = setTimeout(() => ctrl.abort(), ms);
-  try {
-    return await fetch(url, { ...init, signal: ctrl.signal });
-  } finally {
-    clearTimeout(id);
-  }
-}
-
-type Integration = {
-  id: string; name: string; url: string; method: string;
-  header_name: string | null; header_value: string | null; results_path: string | null;
+export type ProviderStatus = {
+  id: string;
+  name: string;
+  status: "ok" | "empty" | "error" | "skipped";
+  count: number;
+  message?: string;
 };
 
-async function callIntegration(it: Integration, vars: SearchVars) {
-  const url = fillTemplate(it.url, vars);
-  const headers: Record<string, string> = { accept: "application/json", "user-agent": UA };
-  if (it.header_name && it.header_value) headers[it.header_name] = it.header_value;
-  const init: RequestInit = { method: it.method, headers };
-  if (it.method === "POST") {
-    headers["content-type"] = "application/json";
-    init.body = JSON.stringify(vars);
+export type SearchResult = {
+  items: DiscoveredLead[];
+  providers: ProviderStatus[];
+  notices: string[];
+};
+
+type ProviderPrefs = { overpass?: boolean; nominatim?: boolean };
+
+/**
+ * Abort signal of the incoming HTTP request: it fires when the browser cancels the search
+ * (or the tab goes away), so the providers stop instead of finishing work nobody will read.
+ */
+async function requestSignal(): Promise<AbortSignal | undefined> {
+  try {
+    const { getRequest } = await import("@tanstack/react-start/server");
+    return getRequest().signal;
+  } catch {
+    return undefined;
   }
-  const res = await fetchWithTimeout(url, init, 20000);
-  const text = await res.text();
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  let json: unknown;
-  try { json = JSON.parse(text); } catch { throw new Error("resposta não é JSON"); }
-  const items = extractItems(json, it.results_path)
-    .map((o, i) => mapRecord(o, { ...vars, integrationId: it.id, index: i }))
-    .filter((x): x is DiscoveredLead => !!x);
-  return { items, sample: text.slice(0, 1500) };
 }
 
-export const searchLeads = createServerFn({ method: "POST" })
+const friendly = (e: unknown) => {
+  const m = e instanceof Error ? e.message : "";
+  if (/tempo esgotado|timeout/i.test(m)) return "demorou demais para responder";
+  if (/429|limite/i.test(m)) return "limite de uso atingido; tente em alguns minutos";
+  if (/ocupado/i.test(m)) return "muito requisitado agora; tente novamente em instantes";
+  return m && m.length < 140 ? m : "indisponível no momento";
+};
+
+export const searchOsm = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => searchInputSchema.parse(d))
+  .handler(({ data, context }) =>
+    runSafely("searchOsm", async (): Promise<SearchResult> => {
+      const { serverConfig } = await import("./server/env.server");
+      const { enforceRateLimit } = await import("./server/rate-limit.server");
+      const { overpassSearch } = await import("./server/providers/overpass.server");
+      const { cityBBox, nominatimSearch } = await import("./server/providers/nominatim.server");
+      const sb = context.supabase;
+      const signal = await requestSignal();
+      await enforceRateLimit(sb, context.userId, "search", serverConfig.rateLimit.searchPerMinute);
+
+      const { data: settings } = await sb.from("user_settings").select("providers").maybeSingle();
+      const prefs = (settings?.providers ?? {}) as ProviderPrefs;
+      const useOverpass = serverConfig.overpass.enabled && prefs.overpass !== false;
+      const useNominatim = serverConfig.nominatim.enabled && prefs.nominatim !== false;
+
+      const providers: ProviderStatus[] = [];
+      const notices: string[] = [];
+      let items: DiscoveredLead[] = [];
+
+      // 1) Overpass: structured, complete results for a state or city.
+      if (data.uf === "BR") {
+        providers.push({
+          id: "overpass",
+          name: "OpenStreetMap (Overpass)",
+          status: "skipped",
+          count: 0,
+          message: "não usado na busca nacional (consulta pesada demais)",
+        });
+        notices.push(
+          "Na busca em todo o Brasil usamos apenas a busca textual. Para resultados completos, escolha um estado.",
+        );
+      } else if (!useOverpass) {
+        providers.push({
+          id: "overpass",
+          name: "OpenStreetMap (Overpass)",
+          status: "skipped",
+          count: 0,
+          message: "desativado",
+        });
+      } else {
+        let bbox;
+        if (data.city && useNominatim) {
+          try {
+            bbox = (await cityBBox(sb, data.uf, data.city, signal)) ?? undefined;
+            if (!bbox)
+              notices.push(
+                `Não localizamos o município "${data.city}". Verifique a grafia; buscamos pelo nome exato.`,
+              );
+          } catch {
+            /* fall back to the administrative area query */
+          }
+        }
+        if (signal?.aborted) throw new AppError("VALIDATION", "Busca cancelada.");
+        const r = await overpassSearch({ ...data, bbox }, signal);
+        items = r.items;
+        providers.push(
+          r.host
+            ? {
+                id: "overpass",
+                name: "OpenStreetMap (Overpass)",
+                status: r.items.length ? "ok" : "empty",
+                count: r.items.length,
+                ...(r.cached ? { message: "resultado em cache (10 min)" } : {}),
+              }
+            : {
+                id: "overpass",
+                name: "OpenStreetMap (Overpass)",
+                status: "error",
+                count: 0,
+                message: friendly(new Error(r.errors.at(-1) ?? "")),
+              },
+        );
+      }
+
+      // 2) Nominatim text search: fallback/complement when Overpass failed or found few.
+      const needMore = items.length < Math.min(data.limit, 20);
+      if (signal?.aborted) throw new AppError("VALIDATION", "Busca cancelada.");
+      if (useNominatim && needMore) {
+        try {
+          const nom = await nominatimSearch(sb, data, signal);
+          const before = items.length;
+          items = mergeDuplicates([...items, ...nom]);
+          providers.push({
+            id: "nominatim",
+            name: "OpenStreetMap (Nominatim)",
+            status: nom.length ? "ok" : "empty",
+            count: items.length - before,
+          });
+        } catch (e) {
+          providers.push({
+            id: "nominatim",
+            name: "OpenStreetMap (Nominatim)",
+            status: "error",
+            count: 0,
+            message: friendly(e),
+          });
+        }
+      } else {
+        providers.push({
+          id: "nominatim",
+          name: "OpenStreetMap (Nominatim)",
+          status: "skipped",
+          count: 0,
+          message: useNominatim ? "não foi necessário" : "desativado",
+        });
+      }
+
+      return { items: mergeDuplicates(items).slice(0, data.limit), providers, notices };
+    }),
+  );
+
+export const searchIntegrations = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => searchInputSchema.parse(d))
+  .handler(({ data, context }) =>
+    runSafely("searchIntegrations", async (): Promise<SearchResult> => {
+      const { serverConfig } = await import("./server/env.server");
+      if (!serverConfig.integrations.enabled) return { items: [], providers: [], notices: [] };
+      const { callIntegration, INTEGRATION_SERVER_COLUMNS } =
+        await import("./server/providers/custom.server");
+      const { enforceRateLimit } = await import("./server/rate-limit.server");
+      const sb = context.supabase;
+      const signal = await requestSignal();
+      const { data: rows, error } = await sb
+        .from("api_integrations")
+        .select(INTEGRATION_SERVER_COLUMNS)
+        .eq("enabled", true)
+        .eq("use_in_search", true)
+        .order("created_at")
+        .limit(serverConfig.integrations.maxPerUser);
+      if (error) throw new AppError("INTERNAL", "Não foi possível carregar suas integrações.");
+      if (!rows?.length) return { items: [], providers: [], notices: [] };
+      await enforceRateLimit(
+        sb,
+        context.userId,
+        "search",
+        serverConfig.rateLimit.searchPerMinute * 2,
+      );
+      const results = await Promise.all(
+        rows.map(async (it) => {
+          try {
+            const r = await callIntegration(sb, it, { ...data, city: data.city }, signal);
+            return {
+              items: r.items,
+              status: {
+                id: `api:${it.id}`,
+                name: it.name,
+                status: r.items.length ? "ok" : "empty",
+                count: r.items.length,
+              } as ProviderStatus,
+            };
+          } catch (e) {
+            return {
+              items: [],
+              status: {
+                id: `api:${it.id}`,
+                name: it.name,
+                status: "error",
+                count: 0,
+                message: friendly(e),
+              } as ProviderStatus,
+            };
+          }
+        }),
+      );
+      return {
+        items: mergeDuplicates(results.flatMap((r) => r.items)).slice(0, data.limit),
+        providers: results.map((r) => r.status),
+        notices: [],
+      };
+    }),
+  );
+
+export const lookupCnpj = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
     z
       .object({
-        niche: z.string().trim().min(2).max(60),
-        uf: z.string().length(2),
-        city: z.string().trim().max(80).optional(),
-        limit: z.number().int().min(1).max(200),
+        cnpj: z
+          .string()
+          .transform((c) => normalizeCnpj(c) ?? "")
+          .refine(isValidCnpj, "CNPJ inválido (confira os dígitos)"),
       })
       .parse(d),
   )
-  .handler(async ({ data, context }) => {
-    const vars: SearchVars = { ...data, city: data.city || undefined };
-    const errors: string[] = [];
-
-    // User's custom APIs run in parallel with OpenStreetMap.
-    const { data: ints } = await context.supabase
-      .from("api_integrations")
-      .select("id,name,url,method,header_name,header_value,results_path")
-      .eq("enabled", true)
-      .eq("use_in_search", true);
-    const customP = Promise.all(
-      (ints ?? []).map(async (it) => {
-        try { return (await callIntegration(it, vars)).items; }
-        catch (e) { errors.push(`${it.name}: ${e instanceof Error ? e.message : "erro"}`); return []; }
-      }),
-    ).then((a) => a.flat());
-
-    const osmP = (async () => {
-      let bbox: BBox | undefined;
-      if (vars.city) {
-        try {
-          const u = `https://nominatim.openstreetmap.org/search?format=json&limit=1&country=Brazil&state=${encodeURIComponent(data.uf)}&city=${encodeURIComponent(vars.city)}`;
-          const r = await fetchWithTimeout(u, { headers: { "user-agent": UA } }, 10000);
-          const j = (await r.json()) as { boundingbox?: string[] }[];
-          const b = j[0]?.boundingbox?.map(Number);
-          if (b && b.length === 4) bbox = [b[0]!, b[2]!, b[1]!, b[3]!];
-        } catch { /* fall back to area query */ }
-      }
-      const query = buildOverpassQuery({ ...vars, bbox });
-      const attempt = async (url: string) => {
-        const host = new URL(url).host;
-        try {
-          const res = await fetchWithTimeout(url, {
-            method: "POST",
-            headers: { "content-type": "application/x-www-form-urlencoded", "user-agent": UA },
-            body: "data=" + encodeURIComponent(query),
-          }, 85000);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const json = (await res.json()) as { elements?: OsmElement[]; remark?: string };
-          if (!json.elements) throw new Error(json.remark ?? "resposta inválida");
-          return { json: json as { elements: OsmElement[] }, host };
-        } catch (e) {
-          errors.push(`${host}: ${e instanceof Error ? e.message : "erro"}`);
-          throw e;
-        }
-      };
-      try {
-        const { json, host } = await Promise.any(OVERPASS_ENDPOINTS.map(attempt));
-        const items = json.elements
-          .map((e) => parseElement(e, { niche: data.niche, uf: data.uf, city: vars.city }))
-          .filter((x): x is DiscoveredLead => !!x);
-        return { items, host };
-      } catch {
-        return { items: [] as DiscoveredLead[], host: null };
-      }
-    })();
-
-    // Nominatim text search: fast fallback when Overpass mirrors are overloaded.
-    const nomP = (async () => {
-      const stateName = UFS.find(([s]) => s === data.uf.toUpperCase())?.[1] ?? data.uf;
-      const q = `${data.niche} em ${vars.city ? vars.city + ", " : ""}${stateName}`;
-      try {
-        const r = await fetchWithTimeout(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=40&addressdetails=1&extratags=1&countrycodes=br&q=${encodeURIComponent(q)}`, { headers: { "user-agent": UA } }, 15000);
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const j = (await r.json()) as NominatimPlace[];
-        return j.filter((p) => !p.address?.["state"] || p.address["state"] === stateName)
-          .map((p) => parseNominatim(p, { niche: data.niche, uf: data.uf, city: vars.city }))
-          .filter((x): x is DiscoveredLead => !!x);
-      } catch (e) {
-        errors.push(`nominatim: ${e instanceof Error ? e.message : "erro"}`);
-        return [] as DiscoveredLead[];
-      }
-    })();
-
-    const [custom, osm, nom] = await Promise.all([customP, osmP, nomP]);
-    const providers = [osm.host, nom.length ? "nominatim.openstreetmap.org" : null, ...(ints ?? []).filter((i) => !errors.some((e) => e.startsWith(i.name + ":"))).map((i) => i.name)].filter(Boolean);
-    const items = dedupe([...custom, ...osm.items, ...nom]).slice(0, data.limit);
-    return { items, provider: providers.length ? providers.join(" + ") : null, errors };
-  });
-
-export const testIntegration = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ id: z.string().uuid(), niche: z.string().max(60), uf: z.string().length(2), city: z.string().max(80).optional() }).parse(d))
-  .handler(async ({ data, context }) => {
-    const { data: it, error } = await context.supabase
-      .from("api_integrations")
-      .select("id,name,url,method,header_name,header_value,results_path")
-      .eq("id", data.id)
-      .maybeSingle();
-    if (error || !it) return { ok: false as const, error: "Integração não encontrada" };
-    try {
-      const r = await callIntegration(it, { niche: data.niche, uf: data.uf, city: data.city || undefined, limit: 10 });
-      return { ok: true as const, count: r.items.length, preview: r.items.slice(0, 5).map((l) => l.name), sample: r.sample };
-    } catch (e) {
-      return { ok: false as const, error: e instanceof Error ? e.message : "Falha" };
-    }
-  });
-
-export const lookupCnpj = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ cnpj: z.string().regex(/^\d{14}$/) }).parse(d))
-  .handler(async ({ data }) => {
-    const res = await fetchWithTimeout(`https://brasilapi.com.br/api/cnpj/v1/${data.cnpj}`, {}, 15000);
-    if (!res.ok) return { ok: false as const, error: res.status === 404 ? "CNPJ não encontrado" : `BrasilAPI HTTP ${res.status}` };
-    const j = (await res.json()) as Record<string, unknown>;
-    const s = (k: string) => (j[k] == null || j[k] === "" ? null : String(j[k]));
-    const address = [s("descricao_tipo_de_logradouro"), s("logradouro"), s("numero"), s("bairro"), s("cep")]
-      .filter(Boolean)
-      .join(", ");
-    return {
-      ok: true as const,
-      data: {
-        legal_name: s("razao_social"),
-        trade_name: s("nome_fantasia"),
-        cnae: [s("cnae_fiscal"), s("cnae_fiscal_descricao")].filter(Boolean).join(" - ") || null,
-        address: address || null,
-        city: s("municipio"),
-        state: s("uf"),
-        phone: s("ddd_telefone_1"),
-        email: s("email"),
-        situacao: s("descricao_situacao_cadastral"),
-      },
-    };
-  });
+  .handler(({ data, context }) =>
+    runSafely("lookupCnpj", async () => {
+      const { serverConfig } = await import("./server/env.server");
+      const { enforceRateLimit } = await import("./server/rate-limit.server");
+      const { lookupCnpjData } = await import("./server/providers/brasilapi.server");
+      await enforceRateLimit(
+        context.supabase,
+        context.userId,
+        "cnpj",
+        serverConfig.rateLimit.cnpjPerMinute,
+      );
+      return lookupCnpjData(context.supabase, data.cnpj);
+    }),
+  );

@@ -1,3 +1,5 @@
+// Database types for the LeadHunter schema (supabase/migrations). Regenerate with:
+//   npx supabase gen types typescript --linked > src/integrations/supabase/types.ts
 export type Json =
   | string
   | number
@@ -24,6 +26,8 @@ export type Database = {
           method: string
           name: string
           results_path: string | null
+          secret_ciphertext: string | null
+          updated_at: string
           url: string
           use_in_search: boolean
           user_id: string
@@ -37,6 +41,8 @@ export type Database = {
           method?: string
           name: string
           results_path?: string | null
+          secret_ciphertext?: string | null
+          updated_at?: string
           url: string
           use_in_search?: boolean
           user_id?: string
@@ -50,6 +56,8 @@ export type Database = {
           method?: string
           name?: string
           results_path?: string | null
+          secret_ciphertext?: string | null
+          updated_at?: string
           url?: string
           use_in_search?: boolean
           user_id?: string
@@ -98,6 +106,7 @@ export type Database = {
           description: string | null
           id: string
           name: string
+          updated_at: string
           user_id: string
         }
         Insert: {
@@ -105,6 +114,7 @@ export type Database = {
           description?: string | null
           id?: string
           name: string
+          updated_at?: string
           user_id?: string
         }
         Update: {
@@ -112,6 +122,7 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
@@ -151,6 +162,44 @@ export type Database = {
           },
         ]
       }
+      lead_status_events: {
+        Row: {
+          backfilled: boolean
+          created_at: string
+          from_status: string | null
+          id: number
+          lead_id: string
+          to_status: string
+          user_id: string
+        }
+        Insert: {
+          backfilled?: boolean
+          created_at?: string
+          from_status?: string | null
+          id?: number
+          lead_id: string
+          to_status: string
+          user_id: string
+        }
+        Update: {
+          backfilled?: boolean
+          created_at?: string
+          from_status?: string | null
+          id?: number
+          lead_id?: string
+          to_status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_status_events_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           address: string | null
@@ -164,22 +213,27 @@ export type Database = {
           instagram: string | null
           lat: number | null
           legal_name: string | null
+          linkedin: string | null
           lng: number | null
           name: string
+          name_key: string | null
           niche: string | null
           notes: string | null
           phone: string | null
+          priority: number
           revenue: number | null
           revenue_source: string | null
           source: string
           source_id: string | null
           state: string | null
           status: string
+          status_changed_at: string | null
           trade_name: string | null
           updated_at: string
           user_id: string
           verified_at: string | null
           website: string | null
+          whatsapp: string | null
         }
         Insert: {
           address?: string | null
@@ -193,22 +247,27 @@ export type Database = {
           instagram?: string | null
           lat?: number | null
           legal_name?: string | null
+          linkedin?: string | null
           lng?: number | null
           name: string
+          name_key?: never
           niche?: string | null
           notes?: string | null
           phone?: string | null
+          priority?: number
           revenue?: number | null
           revenue_source?: string | null
           source?: string
           source_id?: string | null
           state?: string | null
           status?: string
+          status_changed_at?: string | null
           trade_name?: string | null
           updated_at?: string
           user_id?: string
           verified_at?: string | null
           website?: string | null
+          whatsapp?: string | null
         }
         Update: {
           address?: string | null
@@ -222,22 +281,57 @@ export type Database = {
           instagram?: string | null
           lat?: number | null
           legal_name?: string | null
+          linkedin?: string | null
           lng?: number | null
           name?: string
+          name_key?: never
           niche?: string | null
           notes?: string | null
           phone?: string | null
+          priority?: number
           revenue?: number | null
           revenue_source?: string | null
           source?: string
           source_id?: string | null
           state?: string | null
           status?: string
+          status_changed_at?: string | null
           trade_name?: string | null
           updated_at?: string
           user_id?: string
           verified_at?: string | null
           website?: string | null
+          whatsapp?: string | null
+        }
+        Relationships: []
+      }
+      user_settings: {
+        Row: {
+          created_at: string
+          default_city: string | null
+          default_uf: string | null
+          providers: Json
+          search_guide_dismissed: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          default_city?: string | null
+          default_uf?: string | null
+          providers?: Json
+          search_guide_dismissed?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          created_at?: string
+          default_city?: string | null
+          default_uf?: string | null
+          providers?: Json
+          search_guide_dismissed?: boolean
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -246,7 +340,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      acquire_provider_slot: {
+        Args: { p_interval_ms: number; p_provider: string }
+        Returns: number
+      }
+      consume_rate_limit: {
+        Args: { p_bucket: string; p_max: number; p_window_seconds: number }
+        Returns: boolean
+      }
+      lead_dashboard: {
+        Args: { p_weeks?: number }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

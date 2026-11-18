@@ -6,12 +6,18 @@ const Map = lazy(() => import("./index"));
 
 export type { MapPoint };
 
-export function LazyLeadMap(props: { points: MapPoint[]; selectedId?: string | null; onSelect?: (id: string) => void }) {
-  const fallback = <div className="h-full w-full animate-pulse rounded-xl bg-muted" />;
+export function LazyLeadMap(props: {
+  points: MapPoint[];
+  selectedId?: string | null;
+  onSelect?: (id: string) => void;
+}) {
+  const fallback = (
+    <div className="h-full w-full animate-pulse rounded-xl bg-muted" aria-label="Carregando mapa" />
+  );
   return (
     <ClientOnly fallback={fallback}>
       <Suspense fallback={fallback}>
-        <Map {...props} />
+        <Map points={props.points} selectedId={props.selectedId} onSelect={props.onSelect} />
       </Suspense>
     </ClientOnly>
   );

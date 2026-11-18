@@ -1,0 +1,8 @@
+# Normalise line endings: LF in the repo and in the working tree (avoids CRLF lint noise on Windows).
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
+*.webp binary
+*.woff2 binary
+*.xlsx binary
